@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  
+  <PropertyGroup>
+    <PackageId>Allvis.Kaylee.Validator.SqlServer</PackageId>
+    <Version>0.0.1-alpha</Version>
+    <Authors>Sindre van der Linden</Authors>
+    <Company>Allvis AS</Company>
+    <Description>Tests a SQL Server database for compliance with a Kaylee schema. The tool generates SQL queries for solving the discrepancies, which the user may run at their own discretion/risk. NOTE: Always analyze database changes on a case-by-case basis.</Description>
+    <PackageTags>Kaylee;DSL;Model;Validator;SqlServer</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/Allvis-AS/Allvis.Kaylee.Validator.SqlServer.git</RepositoryUrl>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net5.0</TargetFramework>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Allvis.Kaylee.Analyzer" Version="0.0.10" />
+    <PackageReference Include="CommandLineParser" Version="2.8.0" />
+    <PackageReference Include="Dapper" Version="2.0.78" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="2.1.0" />
+    <PackageReference Include="SqlKata" Version="2.2.0" />
+    <PackageReference Include="SqlKata.Execution" Version="2.2.0" />
+  </ItemGroup>
+
+</Project>
