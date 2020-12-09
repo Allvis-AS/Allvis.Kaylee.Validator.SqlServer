@@ -18,7 +18,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 sb.Append($"[{field.Name}]");
             }
             sb.Append(' ');
-            sb.Append(field.GetSqlServerType());
+            sb.Append(field.GetSqlServerTypeWithExtras());
             sb.Append(' ');
             if (field.Nullable)
             {
@@ -36,22 +36,23 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
             return sb.ToString();
         }
 
-        public static string GetSqlServerType(this Analyzer.Models.Field field) => field.Type switch
-        {
-            FieldType.BIT => "BIT",
-            FieldType.TINYINT => "TINYINT",
-            FieldType.INT => $"INT{(field.AutoIncrement ? " IDENTITY(1, 1)" : string.Empty)}",
-            FieldType.BIGINT => $"BIGINT{(field.AutoIncrement ? " IDENTITY(1, 1)" : string.Empty)}",
-            FieldType.DECIMAL => $"DECIMAL({field.GetSqlServerSize()})",
-            FieldType.CHAR => "NCHAR(1)",
-            FieldType.TEXT => $"NVARCHAR({field.GetSqlServerSize()})",
-            FieldType.GUID => "UNIQUEIDENTIFIER",
-            FieldType.DATE => "DATETIMEOFFSET",
-            FieldType.VARBINARY => $"VARBINARY({field.GetSqlServerSize()})",
-            FieldType.BINARY => $"BINARY({field.GetSqlServerSize()})",
-            FieldType.ROWVERSION => "ROWVERSION",
-            _ => throw new ArgumentOutOfRangeException(nameof(field))
-        };
+        public static string GetSqlServerTypeWithExtras(this Analyzer.Models.Field field)
+            => field.Type switch
+            {
+                FieldType.BIT => "BIT",
+                FieldType.TINYINT => "TINYINT",
+                FieldType.INT => $"INT{(field.AutoIncrement ? " IDENTITY(1, 1)" : string.Empty)}",
+                FieldType.BIGINT => $"BIGINT{(field.AutoIncrement ? " IDENTITY(1, 1)" : string.Empty)}",
+                FieldType.DECIMAL => $"DECIMAL({field.GetSqlServerSize()})",
+                FieldType.CHAR => "NCHAR(1)",
+                FieldType.TEXT => $"NVARCHAR({field.GetSqlServerSize()})",
+                FieldType.GUID => "UNIQUEIDENTIFIER",
+                FieldType.DATE => "DATETIMEOFFSET",
+                FieldType.VARBINARY => $"VARBINARY({field.GetSqlServerSize()})",
+                FieldType.BINARY => $"BINARY({field.GetSqlServerSize()})",
+                FieldType.ROWVERSION => "ROWVERSION",
+                _ => throw new ArgumentOutOfRangeException(nameof(field))
+            };
 
         private static string GetSqlServerSize(this Analyzer.Models.Field field)
         {

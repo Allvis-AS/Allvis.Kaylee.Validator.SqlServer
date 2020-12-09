@@ -1,11 +1,16 @@
+using Allvis.Kaylee.Analyzer.Models;
+using System;
+
 namespace Allvis.Kaylee.Validator.SqlServer.Reporters
 {
-    public interface IReporter
+    public interface IReporter : IDisposable
     {
-        void ReportMissingSchema(Analyzer.Models.Schema schema);
-        void ReportMissingTable(Analyzer.Models.Entity entity);
-        void ReportMissingView(Analyzer.Models.Entity entity);
-        void ReportMissingTableColumn(Analyzer.Models.Field field);
-        void ReportMissingViewColumn(Analyzer.Models.Field field);
+        void ReportMissingSchema(Schema schema);
+        void ReportMissingTable(Entity entity);
+        void ReportMissingView(Entity entity);
+        void ReportMissingTableColumn(Field field);
+        void ReportMissingViewColumn(Field field);
+        void ReportMissingUniqueKey(UniqueKey uniqueKey, int index);
+        void ReportIncorrectTableColumn(Field field, string hint);
     }
 }

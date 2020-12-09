@@ -2,7 +2,6 @@
 using Allvis.Kaylee.Validator.SqlServer.Builders;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 
 namespace Allvis.Kaylee.Validator.SqlServer.Extensions
 {
@@ -32,12 +31,10 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 sb.I(sb =>
                 {
                     var allFields = entity.GetAllFields();
-                    var width = 6 + allFields.Max(f => f.Name.Length);
-                    var remainder = width % 4;
-                    width += 4 - remainder;
-                    allFields.ForEach((field, last) =>
+                    var alignedSources = allFields.Select(f => $"[t].[{f.Name}]").AlignLeft().ToList();
+                    allFields.ForEach((field, index, last) =>
                     {
-                        var source = $"[t].[{field.Name}]".PadRight(width);
+                        var source = alignedSources[index];
                         var comma = last ? string.Empty : ",";
                         sb.AL($"{source}[{field.Name}]{comma}");
                     });
@@ -61,32 +58,39 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
             sb.I(sb =>
             {
                 var allFields = entity.GetAllFields();
-                var width = 2 + allFields.Max(f => f.Name.Length);
-                var remainder = width % 4;
-                width += 4 - remainder;
+                var width = allFields.Select(f => $"[{f.Name}]").GetAlignPadWidth();
                 foreach (var field in allFields)
                 {
                     sb.AL($"{field.GetSqlServerSpecification(width)},");
                 }
-                var pk = string.Join(", ", entity.GetFullPrimaryKey().Select(fr => $"[{fr.FieldName}] ASC"));
-                sb.A($"CONSTRAINT PK_{entity.GetTableName()} PRIMARY KEY CLUSTERED({pk})", indent: true);
-
-                var ukIdx = 1;
-                foreach (var key in entity.UniqueKeys)
+                sb.A(entity.GetPrimaryKeySpecification(), indent: true);
+                entity.UniqueKeys.ForEach((key, index, last) =>
                 {
-                    var ukName = $"UK_{entity.GetTableName()}_{ukIdx.ToString().PadLeft(2, '0')}";
-                    var uk = string.Join(", ", key.FieldReferences.Select(fr => $"[{fr.FieldName}] ASC"));
                     sb.A(",");
                     sb.NL();
-                    sb.A($"CONSTRAINT {ukName} UNIQUE NONCLUSTERED({uk})", indent: true);
-                    ukIdx++;
-                }
+                    sb.A(GetUniqueKeySpecification(key, index + 1), indent: true);
+                });
                 sb.NL();
             });
             sb.AL(");");
             sb.AL("GO");
             return sb.ToString();
         }
+
+        public static string GetPrimaryKeySpecification(this Analyzer.Models.Entity entity)
+        {
+            var columns = string.Join(", ", entity.GetFullPrimaryKey().Select(fr => $"[{fr.FieldName}] ASC"));
+            return $"CONSTRAINT PK_{entity.GetTableName()} PRIMARY KEY CLUSTERED({columns})";
+        }
+
+        public static string GetUniqueKeySpecification(this Analyzer.Models.UniqueKey key, int idx)
+        {
+            var columns = string.Join(", ", key.FieldReferences.Select(fr => $"[{fr.FieldName}] ASC"));
+            return $"CONSTRAINT {key.GetUniqueKeySpecificationName(idx)} UNIQUE NONCLUSTERED({columns})";
+        }
+
+        public static string GetUniqueKeySpecificationName(this Analyzer.Models.UniqueKey key, int idx)
+            => $"UK_{key.Entity.GetTableName()}_{idx.ToString().PadLeft(2, '0')}";
 
         private static IEnumerable<Analyzer.Models.Field> GetAllFields(this Analyzer.Models.Entity entity)
             => entity.GetFullPrimaryKey().Select(fr => fr.ResolvedField).Concat(entity.Fields).Distinct();

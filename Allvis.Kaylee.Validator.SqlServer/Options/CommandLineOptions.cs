@@ -8,7 +8,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Options
             'd',
             "dir",
             Required = false,
-            HelpText = "The directory where the *.kay files reside. If not specified, then it defaults to the current directory.")]
+            HelpText = "The directory where the *.kay files reside. If not specified, defaults to the current directory.")]
         public string Directory { get; set; } = string.Empty;
 
         [Option(
@@ -17,6 +17,13 @@ namespace Allvis.Kaylee.Validator.SqlServer.Options
             Required = true,
             HelpText = "The connection string of the database to connect to.")]
         public string ConnectionString { get; set; } = string.Empty;
+
+        [Option(
+            'o',
+            "out",
+            Required = false,
+            HelpText = "The file to write the output to (throws an error if it already exists). If not specified, outputs to the console.")]
+        public string OutFile { get; set; } = string.Empty;
 
         [Option(
             't',

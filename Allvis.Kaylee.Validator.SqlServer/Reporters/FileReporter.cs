@@ -1,11 +1,20 @@
 using System;
+using System.IO;
+using System.Text;
 using Allvis.Kaylee.Analyzer.Models;
 using Allvis.Kaylee.Validator.SqlServer.Extensions;
 
 namespace Allvis.Kaylee.Validator.SqlServer.Reporters
 {
-    public class ConsoleReporter : IReporter
+    public class FileReporter : IReporter
     {
+        private readonly TextWriter writer;
+
+        public FileReporter(string file)
+        {
+            writer = new StreamWriter(File.Open(file, FileMode.CreateNew), Encoding.UTF8, leaveOpen: false);
+        }
+
         public void ReportMissingSchema(Schema schema)
         {
             WriteComment($"The schema [{schema.Name}] is missing:");
@@ -66,29 +75,14 @@ namespace Allvis.Kaylee.Validator.SqlServer.Reporters
             WriteLine();
         }
 
-        private static void WriteComment(string comment)
+        private void WriteComment(string comment)
         {
-            SetColorComment();
-            Console.WriteLine(comment);
-            Console.ResetColor();
+            writer.WriteLine($"-- {comment}");
         }
 
-        private static void SetColorComment()
+        private void WriteLine(string line = "")
         {
-            Console.ResetColor();
-            Console.ForegroundColor = ConsoleColor.Yellow;
-        }
-
-        private static void WriteLine(string line = "")
-        {
-            SetColorLine();
-            Console.WriteLine(line);
-            Console.ResetColor();
-        }
-
-        private static void SetColorLine()
-        {
-            Console.ResetColor();
+            writer.WriteLine(line);
         }
 
         #region IDisposable support
@@ -100,6 +94,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Reporters
             {
                 if (disposing)
                 {
+                    writer?.Dispose();
                 }
                 disposedValue = true;
             }

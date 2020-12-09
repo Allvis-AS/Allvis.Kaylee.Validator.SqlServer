@@ -26,7 +26,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 .Select("TABLE_SCHEMA as Schema")
                 .Select("TABLE_NAME as Table")
                 .Select("COLUMN_NAME as Name")
-                .Select("COLUMN_DEFAULT as Default")
+                .SelectRaw("CASE LEFT(COLUMN_DEFAULT, 2) WHEN '((' THEN SUBSTRING(COLUMN_DEFAULT, 3, LEN(COLUMN_DEFAULT) - 4) WHEN '(''' THEN SUBSTRING(COLUMN_DEFAULT, 2, LEN(COLUMN_DEFAULT) - 2) ELSE UPPER(SUBSTRING(COLUMN_DEFAULT, 2, LEN(COLUMN_DEFAULT) - 2)) END as [Default]")
                 .SelectRaw("CASE IS_NULLABLE WHEN 'NO' THEN 0 ELSE 1 END as Nullable")
                 .SelectRaw("UPPER(DATA_TYPE) as Type")
                 .Select("CHARACTER_MAXIMUM_LENGTH as Length")

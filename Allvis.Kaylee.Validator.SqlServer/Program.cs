@@ -22,18 +22,27 @@ namespace Allvis.Kaylee.Validator.SqlServer
         static async Task<int> Main(string[] args)
         {
             var exitCode = 0;
-            await Parser.Default
-                .ParseArguments<CommandLineOptions>(args)
-                .WithParsedAsync(async options =>
-                {
-                    var expected = GetExpected(options.Directory);
-                    var actual = await GetActual(options.ConnectionString, options.Timeout).ConfigureAwait(false);
-                    // TODO: Control this through console argument
-                    var reporter = new ConsoleReporter();
-                    var validator = new DefaultValidator(reporter);
-                    validator.Validate(expected, actual);
-                    exitCode = validator.Issues;
-                }).ConfigureAwait(false);
+            try
+            {
+                await Parser.Default
+                    .ParseArguments<CommandLineOptions>(args)
+                    .WithParsedAsync(async options =>
+                    {
+                        var expected = GetExpected(options.Directory);
+                        var actual = await GetActual(options.ConnectionString, options.Timeout).ConfigureAwait(false);
+                        using var reporter = GetReporter(options.OutFile);
+                        var validator = new DefaultValidator(reporter);
+                        validator.Validate(expected, actual);
+                        exitCode = validator.Issues;
+                    }).ConfigureAwait(false);
+            }
+            catch (Exception e) when (e is IOException)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(e.Message);
+                Console.ResetColor();
+                return -1;
+            }
             return exitCode;
         }
 
@@ -107,6 +116,15 @@ namespace Allvis.Kaylee.Validator.SqlServer
                 var constraint = tableConstraints.Single(c => c.Schema == column.ConstraintSchema && c.Name == column.ConstraintName);
                 constraint.Columns.Add(column);
             }
+        }
+
+        private static IReporter GetReporter(string outFile)
+        {
+            if (string.IsNullOrWhiteSpace(outFile))
+            {
+                return new ConsoleReporter();
+            }
+            return new FileReporter(outFile);
         }
     }
 }

@@ -71,7 +71,46 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
             {
                 ValidateColumn(expectedField, actualTable);
             }
+            var ukIdx = 1;
+            foreach (var key in expectedEntity.UniqueKeys)
+            {
+                ValidateUniqueKey(key, actualTable, ref ukIdx);
+            }
             // TODO: Continue here, check referential constraints
+        }
+
+        private void ValidateUniqueKey(Analyzer.Models.UniqueKey expectedUniqueKey, Table actualTable, ref int index)
+        {
+            TableConstraint actualConstraint;
+            try
+            {
+                actualConstraint = actualTable.Constraints.Where(c => c.IsUnique).Single(constraint =>
+                {
+                    if (constraint.Columns.Count != expectedUniqueKey.FieldReferences.Count)
+                    {
+                        return false;
+                    }
+                    foreach (var expectedField in expectedUniqueKey.FieldReferences.Select(fr => fr.ResolvedField))
+                    {
+                        if (!constraint.Columns.Any(c => c.Name == expectedField.Name))
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                var i = index;
+                while (actualTable.Constraints.Any(c => c.Name == expectedUniqueKey.GetUniqueKeySpecificationName(i)))
+                {
+                    i++;
+                }
+                reporter.ReportMissingUniqueKey(expectedUniqueKey, i);
+                index = i + 1;
+                return;
+            }
         }
 
         private void ValidateView(Analyzer.Models.Entity expectedEntity, Schema actualSchema)
@@ -112,6 +151,38 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                     reporter.ReportMissingTableColumn(expectedField);
                 }
                 return;
+            }
+            if (!isView)
+            {
+                if (actualColumn.Name == "ContactPhone") {
+                    Console.WriteLine(actualColumn.Nullable);
+                    Console.WriteLine(expectedField.Nullable);
+                }
+                var sameNullability = expectedField.Computed || actualColumn.Nullable == expectedField.Nullable;
+                var sameLength = !actualColumn.HasLength || (actualColumn.Length == -1 && expectedField.Size.IsMax) || actualColumn.Length == expectedField.Size.Size || (expectedField.Type == Analyzer.Enums.FieldType.CHAR && actualColumn.Length == 1);
+                var samePrecision = !actualColumn.HasPrecision || (actualColumn.Precision == expectedField.Size.Size && actualColumn.Scale == expectedField.Size.Precision);
+                var sameDefault = (actualColumn.Default?.ToUpperInvariant() ?? string.Empty) == (expectedField.DefaultExpression?.ToUpperInvariant() ?? string.Empty);
+                var sameType = actualColumn.Type == expectedField.Type.GetRawSqlServerType();
+                if (!sameNullability || !sameLength || !samePrecision || !sameDefault || !sameType)
+                {
+                    var hint = "";
+                    if (!sameNullability) {
+                        hint += " nullability";
+                    }
+                    if (!sameLength) {
+                        hint += " length";
+                    }
+                    if (!samePrecision) {
+                        hint += " precision/scale";
+                    }
+                    if (!sameDefault) {
+                        hint += " default";
+                    }
+                    if (!sameType) {
+                        hint += " type";
+                    }
+                    reporter.ReportIncorrectTableColumn(expectedField, hint.Trim());
+                }
             }
         }
     }
