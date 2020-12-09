@@ -59,7 +59,7 @@ namespace Allvis.Kaylee.Validator.SqlServer
             var files = Directory.GetFiles(searchDirectory, "*.kay");
             if (files.Length == 0)
             {
-                throw new InvalidOperationException($"The directory {searchDirectory} contains no *.kay files.");
+                throw new IOException($"The directory {searchDirectory} contains no *.kay files.");
             }
             foreach (var file in files)
             {
