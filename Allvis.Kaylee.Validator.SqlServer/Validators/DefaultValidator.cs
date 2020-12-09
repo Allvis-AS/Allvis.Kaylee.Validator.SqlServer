@@ -154,10 +154,6 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
             }
             if (!isView)
             {
-                if (actualColumn.Name == "ContactPhone") {
-                    Console.WriteLine(actualColumn.Nullable);
-                    Console.WriteLine(expectedField.Nullable);
-                }
                 var sameNullability = expectedField.Computed || actualColumn.Nullable == expectedField.Nullable;
                 var sameLength = !actualColumn.HasLength || (actualColumn.Length == -1 && expectedField.Size.IsMax) || actualColumn.Length == expectedField.Size.Size || (expectedField.Type == Analyzer.Enums.FieldType.CHAR && actualColumn.Length == 1);
                 var samePrecision = !actualColumn.HasPrecision || (actualColumn.Precision == expectedField.Size.Size && actualColumn.Scale == expectedField.Size.Precision);
