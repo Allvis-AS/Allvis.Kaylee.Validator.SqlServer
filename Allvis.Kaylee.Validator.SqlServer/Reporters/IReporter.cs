@@ -8,9 +8,11 @@ namespace Allvis.Kaylee.Validator.SqlServer.Reporters
         void ReportMissingSchema(Schema schema);
         void ReportMissingTable(Entity entity);
         void ReportMissingView(Entity entity);
-        void ReportMissingTableColumn(Field field);
+        void ReportMissingTableColumn(Entity entity, Field field);
         void ReportMissingViewColumn(Field field);
+        void ReportIncorrectTableColumn(Entity entity, Field field, string hint);
         void ReportMissingUniqueKey(UniqueKey uniqueKey, int index);
-        void ReportIncorrectTableColumn(Field field, string hint);
+        void ReportMissingParentForeignKey(Entity entity, int index);
+        void ReportMissingForeignKey(Reference reference, int index);
     }
 }

@@ -28,6 +28,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 .Select("COLUMN_NAME as Name")
                 .SelectRaw("CASE LEFT(COLUMN_DEFAULT, 2) WHEN '((' THEN SUBSTRING(COLUMN_DEFAULT, 3, LEN(COLUMN_DEFAULT) - 4) WHEN '(''' THEN SUBSTRING(COLUMN_DEFAULT, 2, LEN(COLUMN_DEFAULT) - 2) ELSE UPPER(SUBSTRING(COLUMN_DEFAULT, 2, LEN(COLUMN_DEFAULT) - 2)) END as [Default]")
                 .SelectRaw("CASE IS_NULLABLE WHEN 'NO' THEN 0 ELSE 1 END as Nullable")
+                .SelectRaw("CAST(COLUMNPROPERTY(OBJECT_ID('[' + [TABLE_SCHEMA] + ']' + '.' + '[' + [TABLE_NAME] + ']'), [COLUMN_NAME], 'IsIdentity') AS BIT) as IsIdentity")
                 .SelectRaw("UPPER(DATA_TYPE) as Type")
                 .Select("CHARACTER_MAXIMUM_LENGTH as Length")
                 .Select("NUMERIC_PRECISION as Precision")

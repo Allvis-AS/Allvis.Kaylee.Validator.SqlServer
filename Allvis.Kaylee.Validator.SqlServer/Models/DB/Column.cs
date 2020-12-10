@@ -1,4 +1,6 @@
-﻿namespace Allvis.Kaylee.Validator.SqlServer.Models.DB
+﻿using System;
+
+namespace Allvis.Kaylee.Validator.SqlServer.Models.DB
 {
     public class Column
     {
@@ -7,6 +9,7 @@
         public string Name { get; set; } = string.Empty;
         public string? Default { get; set; }
         public bool Nullable { get; set; }
+        public bool IsIdentity { get; set; }
         public string Type { get; set; } = string.Empty;
         public int? Length { get; set; }
         public int? Precision { get; set; }

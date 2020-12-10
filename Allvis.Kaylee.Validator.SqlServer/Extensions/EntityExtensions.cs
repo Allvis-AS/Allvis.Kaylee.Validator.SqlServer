@@ -1,7 +1,10 @@
-﻿using Allvis.Kaylee.Analyzer.Extensions;
+﻿using Allvis.Kaylee.Analyzer.Enums;
+using Allvis.Kaylee.Analyzer.Extensions;
 using Allvis.Kaylee.Validator.SqlServer.Builders;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace Allvis.Kaylee.Validator.SqlServer.Extensions
 {
@@ -61,7 +64,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 var width = allFields.Select(f => $"[{f.Name}]").GetAlignPadWidth();
                 foreach (var field in allFields)
                 {
-                    sb.AL($"{field.GetSqlServerSpecification(width)},");
+                    sb.AL($"{entity.GetSqlServerSpecification(field, width)},");
                 }
                 sb.A(entity.GetPrimaryKeySpecification(), indent: true);
                 entity.UniqueKeys.ForEach((key, index, last) =>
@@ -73,7 +76,6 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 sb.NL();
             });
             sb.AL(");");
-            sb.AL("GO");
             return sb.ToString();
         }
 
@@ -92,7 +94,95 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
         public static string GetUniqueKeySpecificationName(this Analyzer.Models.UniqueKey key, int idx)
             => $"UK_{key.Entity.GetTableName()}_{idx.ToString().PadLeft(2, '0')}";
 
-        private static IEnumerable<Analyzer.Models.Field> GetAllFields(this Analyzer.Models.Entity entity)
+        public static string GetParentForeignKeySpecification(this Analyzer.Models.Entity entity, int idx)
+        {
+            var columns = string.Join(", ", entity.GetParentKey().Select(fr => $"[{fr.Name}]"));
+            var targetTable = entity.Parent.GetFullyQualifiedTable();
+            return $"CONSTRAINT {entity.GetParentForeignKeySpecificationName(idx)} FOREIGN KEY({columns}) REFERENCES {targetTable}({columns}) ON DELETE CASCADE";
+        }
+
+        public static string GetParentForeignKeySpecificationName(this Analyzer.Models.Entity entity, int idx)
+            => $"FK_{entity.GetTableName()}_{idx.ToString().PadLeft(2, '0')}";
+
+        public static string GetForeignKeySpecification(this Analyzer.Models.Reference reference, int idx)
+        {
+            var sourceColumns = string.Join(", ", reference.Source.Select(fr => $"[{fr.FieldName}]"));
+            var targetColumns = string.Join(", ", reference.Target.Select(fr => $"[{fr.FieldName}]"));
+            var targetTable = reference.Target.Last().ResolvedField.Entity.GetFullyQualifiedTable();
+            return $"CONSTRAINT {reference.GetForeignKeySpecificationName(idx)} FOREIGN KEY({sourceColumns}) REFERENCES {targetTable}({targetColumns})";
+        }
+
+        public static string GetForeignKeySpecificationName(this Analyzer.Models.Reference reference, int idx)
+            => $"FK_{reference.Source.Last().ResolvedField.Entity.GetTableName()}_{idx.ToString().PadLeft(2, '0')}";
+
+        public static string GetSqlServerSpecification(this Analyzer.Models.Entity entity, Analyzer.Models.Field field, int nameWidth = 0)
+        {
+            var sb = new StringBuilder();
+            if (nameWidth > 0)
+            {
+                sb.Append($"[{field.Name}]".PadRight(nameWidth));
+            }
+            else
+            {
+                sb.Append($"[{field.Name}]");
+            }
+            sb.Append(' ');
+            sb.Append(entity.GetSqlServerTypeWithExtras(field));
+            sb.Append(' ');
+            if (field.Nullable)
+            {
+                sb.Append("NULL");
+            }
+            else
+            {
+                sb.Append("NOT NULL");
+            }
+            if (!string.IsNullOrWhiteSpace(field.DefaultExpression))
+            {
+                sb.Append(" DEFAULT ");
+                sb.Append(field.DefaultExpression);
+            }
+            return sb.ToString();
+        }
+
+        public static string GetSqlServerTypeWithExtras(this Analyzer.Models.Entity entity, Analyzer.Models.Field field)
+            => field.Type switch
+            {
+                FieldType.BIT => "BIT",
+                FieldType.TINYINT => "TINYINT",
+                FieldType.INT => $"INT{(field.AutoIncrement && !entity.IsPartOfParentKey(field) ? " IDENTITY(1, 1)" : string.Empty)}",
+                FieldType.BIGINT => $"BIGINT{(field.AutoIncrement && !entity.IsPartOfParentKey(field) ? " IDENTITY(1, 1)" : string.Empty)}",
+                FieldType.DECIMAL => $"DECIMAL({field.GetSqlServerSize()})",
+                FieldType.CHAR => "NCHAR(1)",
+                FieldType.TEXT => $"NVARCHAR({field.GetSqlServerSize()})",
+                FieldType.GUID => "UNIQUEIDENTIFIER",
+                FieldType.DATE => "DATETIMEOFFSET",
+                FieldType.VARBINARY => $"VARBINARY({field.GetSqlServerSize()})",
+                FieldType.BINARY => $"BINARY({field.GetSqlServerSize()})",
+                FieldType.ROWVERSION => "ROWVERSION",
+                _ => throw new ArgumentOutOfRangeException(nameof(field))
+            };
+
+        private static string GetSqlServerSize(this Analyzer.Models.Field field)
+        {
+            if (field.Size.IsMax)
+            {
+                return "MAX";
+            }
+            if (field.Type == FieldType.DECIMAL)
+            {
+                return $"{field.Size.Size}, {field.Size.Precision}";
+            }
+            return $"{field.Size.Size}";
+        }
+
+        public static bool IsPartOfParentKey(this Analyzer.Models.Entity entity, Analyzer.Models.Field field)
+            => entity.GetParentKey().Contains(field);
+
+        public static IEnumerable<Analyzer.Models.Field> GetParentKey(this Analyzer.Models.Entity entity)
+            => entity.GetFullPrimaryKey().Select(fr => fr.ResolvedField).Except(entity.PrimaryKey.Select(fr => fr.ResolvedField));
+
+        public static IEnumerable<Analyzer.Models.Field> GetAllFields(this Analyzer.Models.Entity entity)
             => entity.GetFullPrimaryKey().Select(fr => fr.ResolvedField).Concat(entity.Fields).Distinct();
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Allvis.Kaylee.Analyzer.Extensions;
 using Allvis.Kaylee.Validator.SqlServer.Extensions;
 using Allvis.Kaylee.Validator.SqlServer.Models.DB;
 using Allvis.Kaylee.Validator.SqlServer.Reporters;
@@ -22,7 +23,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
         {
             foreach (var expectedSchema in expected.Schemata)
             {
-                Schema actualSchema;
+                Schema? actualSchema = null;
                 try
                 {
                     actualSchema = actual.Single(s => s.Name == expectedSchema.Name);
@@ -31,7 +32,6 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 {
                     Issues++;
                     reporter.ReportMissingSchema(expectedSchema);
-                    continue;
                 }
 
                 foreach (var expectedEntity in expectedSchema.Entities)
@@ -41,7 +41,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
             }
         }
 
-        private void ValidateEntity(Analyzer.Models.Entity expected, Schema actualSchema)
+        private void ValidateEntity(Analyzer.Models.Entity expected, Schema? actualSchema)
         {
             if (!expected.IsQuery)
             {
@@ -54,12 +54,12 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
             }
         }
 
-        private void ValidateTable(Analyzer.Models.Entity expectedEntity, Schema actualSchema)
+        private void ValidateTable(Analyzer.Models.Entity expectedEntity, Schema? actualSchema)
         {
             Table actualTable;
             try
             {
-                actualTable = actualSchema.Tables.Single(t => t.Name == expectedEntity.GetTableName());
+                actualTable = (actualSchema?.Tables ?? Enumerable.Empty<Table>()).Single(t => t.Name == expectedEntity.GetTableName());
             }
             catch (InvalidOperationException)
             {
@@ -67,16 +67,24 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 reporter.ReportMissingTable(expectedEntity);
                 return;
             }
-            foreach (var expectedField in expectedEntity.Fields)
+            foreach (var expectedField in expectedEntity.GetAllFields())
             {
-                ValidateColumn(expectedField, actualTable);
+                ValidateColumn(expectedEntity, expectedField, actualTable);
             }
             var ukIdx = 1;
             foreach (var key in expectedEntity.UniqueKeys)
             {
                 ValidateUniqueKey(key, actualTable, ref ukIdx);
             }
-            // TODO: Continue here, check referential constraints
+            var refIdx = 1;
+            if (expectedEntity.Parent != null)
+            {
+                ValidateParentReference(expectedEntity, actualTable, ref refIdx);
+            }
+            foreach (var reference in expectedEntity.References)
+            {
+                ValidateReference(reference, actualTable, ref refIdx);
+            }
         }
 
         private void ValidateUniqueKey(Analyzer.Models.UniqueKey expectedUniqueKey, Table actualTable, ref int index)
@@ -112,13 +120,123 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 return;
             }
         }
+        private void ValidateParentReference(Analyzer.Models.Entity expectedEntity, Table actualTable, ref int index)
+        {
+            var parentKey = expectedEntity.GetParentKey().ToList();
+            TableConstraint actualConstraint;
+            try
+            {
+                actualConstraint = actualTable.Constraints.Where(c => c.IsForeign).Single(c =>
+                {
+                    var constraint = c.ReferentialConstraint!;
+                    // Same counts
+                    if (constraint.Source!.Columns.Count != parentKey.Count)
+                    {
+                        return false;
+                    }
+                    // Same schemata
+                    if (constraint.Source!.TableSchema != expectedEntity.Schema.Name
+                        || constraint.Target!.TableSchema != expectedEntity.Parent.Schema.Name)
+                    {
+                        return false;
+                    }
+                    // Same tables
+                    if (constraint.Source!.TableName != expectedEntity.GetTableName()
+                        || constraint.Target!.TableName != expectedEntity.Parent.GetTableName())
+                    {
+                        return false;
+                    }
+                    // Same columns and ordering
+                    var sourceColumns = constraint.Source!.Columns.OrderBy(c => c.Position).Select(c => c.Name).ToList();
+                    var targetColumns = constraint.Target!.Columns.OrderBy(c => c.Position).Select(c => c.Name).ToList();
+                    for (var i = 0; i < sourceColumns.Count; i++)
+                    {
+                        var source = sourceColumns[i];
+                        var target = targetColumns[i];
+                        var expectedSource = parentKey[i];
+                        var expectedTarget = parentKey[i];
+                        if (source != expectedSource.Name || target != expectedTarget.Name)
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                var i = index;
+                while (actualTable.Constraints.Any(c => c.Name == expectedEntity.GetParentForeignKeySpecificationName(i)))
+                {
+                    i++;
+                }
+                reporter.ReportMissingParentForeignKey(expectedEntity, i);
+                index = i + 1;
+                return;
+            }
+        }
 
-        private void ValidateView(Analyzer.Models.Entity expectedEntity, Schema actualSchema)
+        private void ValidateReference(Analyzer.Models.Reference expectedReference, Table actualTable, ref int index)
+        {
+            TableConstraint actualConstraint;
+            try
+            {
+                actualConstraint = actualTable.Constraints.Where(c => c.IsForeign).Single(c =>
+                {
+                    var constraint = c.ReferentialConstraint!;
+                    // Same counts
+                    if (constraint.Source!.Columns.Count != expectedReference.Source.Count)
+                    {
+                        return false;
+                    }
+                    // Same schemata
+                    if (constraint.Source!.TableSchema != expectedReference.Source.Last().SchemaName
+                        || constraint.Target!.TableSchema != expectedReference.Target.Last().SchemaName)
+                    {
+                        return false;
+                    }
+                    // Same tables
+                    if (constraint.Source!.TableName != expectedReference.Source.Last().ResolvedField.Entity.GetTableName()
+                        || constraint.Target!.TableName != expectedReference.Target.Last().ResolvedField.Entity.GetTableName())
+                    {
+                        return false;
+                    }
+                    // Same columns and ordering
+                    var sourceColumns = constraint.Source!.Columns.OrderBy(c => c.Position).Select(c => c.Name).ToList();
+                    var targetColumns = constraint.Target!.Columns.OrderBy(c => c.Position).Select(c => c.Name).ToList();
+                    for (var i = 0; i < sourceColumns.Count; i++)
+                    {
+                        var source = sourceColumns[i];
+                        var target = targetColumns[i];
+                        var expectedSource = expectedReference.Source[i];
+                        var expectedTarget = expectedReference.Target[i];
+                        if (source != expectedSource.FieldName || target != expectedTarget.FieldName)
+                        {
+                            return false;
+                        }
+                    }
+                    return true;
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                var i = index;
+                while (actualTable.Constraints.Any(c => c.Name == expectedReference.GetForeignKeySpecificationName(i)))
+                {
+                    i++;
+                }
+                reporter.ReportMissingForeignKey(expectedReference, i);
+                index = i + 1;
+                return;
+            }
+        }
+
+        private void ValidateView(Analyzer.Models.Entity expectedEntity, Schema? actualSchema)
         {
             Table actualTable;
             try
             {
-                actualTable = actualSchema.Tables.Single(t => t.Name == expectedEntity.GetViewName());
+                actualTable = (actualSchema?.Tables ?? Enumerable.Empty<Table>()).Single(t => t.Name == expectedEntity.GetViewName());
             }
             catch (InvalidOperationException)
             {
@@ -126,13 +244,13 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 reporter.ReportMissingView(expectedEntity);
                 return;
             }
-            foreach (var expectedField in expectedEntity.Fields)
+            foreach (var expectedField in expectedEntity.GetAllFields())
             {
-                ValidateColumn(expectedField, actualTable, isView: true);
+                ValidateColumn(expectedEntity, expectedField, actualTable, isView: true);
             }
         }
 
-        private void ValidateColumn(Analyzer.Models.Field expectedField, Table actualTable, bool isView = false)
+        private void ValidateColumn(Analyzer.Models.Entity expectedEntity, Analyzer.Models.Field expectedField, Table actualTable, bool isView = false)
         {
             Column actualColumn;
             try
@@ -148,7 +266,7 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 }
                 else
                 {
-                    reporter.ReportMissingTableColumn(expectedField);
+                    reporter.ReportMissingTableColumn(expectedEntity, expectedField);
                 }
                 return;
             }
@@ -158,26 +276,50 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 var sameLength = !actualColumn.HasLength || (actualColumn.Length == -1 && expectedField.Size.IsMax) || actualColumn.Length == expectedField.Size.Size || (expectedField.Type == Analyzer.Enums.FieldType.CHAR && actualColumn.Length == 1);
                 var samePrecision = !actualColumn.HasPrecision || (actualColumn.Precision == expectedField.Size.Size && actualColumn.Scale == expectedField.Size.Precision);
                 var sameDefault = (actualColumn.Default?.ToUpperInvariant() ?? string.Empty) == (expectedField.DefaultExpression?.ToUpperInvariant() ?? string.Empty);
+                var sameAutoIncrement = expectedEntity.IsPartOfParentKey(expectedField)
+                    ? !actualColumn.IsIdentity
+                    : actualColumn.IsIdentity == expectedField.AutoIncrement; // WHY ISNT THIS REPORTING CORRECTLY
+                if (actualTable.Name == "tbl_TenantProcedureRevisionExecutionCommentReaction" && actualColumn.Name == "CommentId")
+                {
+                    //Console.WriteLine(expectedField.Entity.DisplayName);
+                    //Console.WriteLine(actualColumn.Table);
+                    //Console.WriteLine(actualColumn.Name);
+                    //Console.WriteLine(expectedField.AutoIncrement);
+                    //Console.WriteLine(expectedField.IsPartOfParentKey());
+                    //Console.WriteLine(string.Join(", ", expectedField.Entity.GetFullPrimaryKey().Select(fr => fr.FieldName)));
+                    //Console.WriteLine(string.Join(", ", expectedField.Entity.GetParentKey().Select(f => f.Name)));
+                    //Console.WriteLine(string.Join(", ", expectedField.Entity.PrimaryKey.Select(fr => fr.FieldName)));
+                    //Console.WriteLine(expectedField.AutoIncrement && !expectedField.IsPartOfParentKey());
+                }
                 var sameType = actualColumn.Type == expectedField.Type.GetRawSqlServerType();
-                if (!sameNullability || !sameLength || !samePrecision || !sameDefault || !sameType)
+                if (!sameNullability || !sameLength || !samePrecision || !sameDefault || !sameAutoIncrement || !sameType)
                 {
                     var hint = "";
-                    if (!sameNullability) {
+                    if (!sameNullability)
+                    {
                         hint += " nullability";
                     }
-                    if (!sameLength) {
+                    if (!sameLength)
+                    {
                         hint += " length";
                     }
-                    if (!samePrecision) {
+                    if (!samePrecision)
+                    {
                         hint += " precision/scale";
                     }
-                    if (!sameDefault) {
+                    if (!sameDefault)
+                    {
                         hint += " default";
                     }
-                    if (!sameType) {
+                    if (!sameAutoIncrement)
+                    {
+                        hint += " identity";
+                    }
+                    if (!sameType)
+                    {
                         hint += " type";
                     }
-                    reporter.ReportIncorrectTableColumn(expectedField, hint.Trim());
+                    reporter.ReportIncorrectTableColumn(expectedEntity, expectedField, hint.Trim());
                 }
             }
         }

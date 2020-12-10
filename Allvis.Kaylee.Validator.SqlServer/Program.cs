@@ -14,6 +14,9 @@ using System.Text;
 using System.Threading.Tasks;
 using System;
 using Allvis.Kaylee.Validator.SqlServer.Reporters;
+using Allvis.Kaylee.Validator.SqlServer.Writers;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Allvis.Kaylee.Validator.SqlServer
 {
@@ -29,6 +32,7 @@ namespace Allvis.Kaylee.Validator.SqlServer
                     .WithParsedAsync(async options =>
                     {
                         var expected = GetExpected(options.Directory);
+                        await File.WriteAllTextAsync(@"C:\temp\foo_bar.json", JsonSerializer.Serialize(expected, new JsonSerializerOptions { ReferenceHandler= ReferenceHandler.Preserve})).ConfigureAwait(false);
                         var actual = await GetActual(options.ConnectionString, options.Timeout).ConfigureAwait(false);
                         using var reporter = GetReporter(options.OutFile);
                         var validator = new DefaultValidator(reporter);
@@ -120,11 +124,18 @@ namespace Allvis.Kaylee.Validator.SqlServer
 
         private static IReporter GetReporter(string outFile)
         {
-            if (string.IsNullOrWhiteSpace(outFile))
+            IWriter writer = string.IsNullOrWhiteSpace(outFile)
+                ? new ConsoleWriter()
+                : new FileWriter(outFile);
+            try
             {
-                return new ConsoleReporter();
+                return new DefaultReporter(writer);
             }
-            return new FileReporter(outFile);
+            catch
+            {
+                writer?.Dispose();
+                throw;
+            }
         }
     }
 }
