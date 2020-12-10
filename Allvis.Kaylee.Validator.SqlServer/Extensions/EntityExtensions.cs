@@ -127,20 +127,27 @@ namespace Allvis.Kaylee.Validator.SqlServer.Extensions
                 sb.Append($"[{field.Name}]");
             }
             sb.Append(' ');
-            sb.Append(entity.GetSqlServerTypeWithExtras(field));
-            sb.Append(' ');
-            if (field.Nullable)
+            if (field.Computed)
             {
-                sb.Append("NULL");
+                sb.Append("/* Insert the computation expression here */");
             }
             else
             {
-                sb.Append("NOT NULL");
-            }
-            if (!string.IsNullOrWhiteSpace(field.DefaultExpression))
-            {
-                sb.Append(" DEFAULT ");
-                sb.Append(field.DefaultExpression);
+                sb.Append(entity.GetSqlServerTypeWithExtras(field));
+                sb.Append(' ');
+                if (field.Nullable)
+                {
+                    sb.Append("NULL");
+                }
+                else
+                {
+                    sb.Append("NOT NULL");
+                }
+                if (!string.IsNullOrWhiteSpace(field.DefaultExpression))
+                {
+                    sb.Append(" DEFAULT ");
+                    sb.Append(field.DefaultExpression);
+                }
             }
             return sb.ToString();
         }
