@@ -275,22 +275,12 @@ namespace Allvis.Kaylee.Validator.SqlServer.Validators
                 var sameNullability = expectedField.Computed || actualColumn.Nullable == expectedField.Nullable;
                 var sameLength = !actualColumn.HasLength || (actualColumn.Length == -1 && expectedField.Size.IsMax) || actualColumn.Length == expectedField.Size.Size || (expectedField.Type == Analyzer.Enums.FieldType.CHAR && actualColumn.Length == 1);
                 var samePrecision = !actualColumn.HasPrecision || (actualColumn.Precision == expectedField.Size.Size && actualColumn.Scale == expectedField.Size.Precision);
-                var sameDefault = (actualColumn.Default?.ToUpperInvariant() ?? string.Empty) == (expectedField.DefaultExpression?.ToUpperInvariant() ?? string.Empty);
+                var sameDefault = expectedEntity.IsPartOfParentKey(expectedField)
+                    ? actualColumn.Default == null
+                    : (actualColumn.Default?.ToUpperInvariant() ?? string.Empty) == (expectedField.DefaultExpression?.ToUpperInvariant() ?? string.Empty);
                 var sameAutoIncrement = expectedEntity.IsPartOfParentKey(expectedField)
                     ? !actualColumn.IsIdentity
-                    : actualColumn.IsIdentity == expectedField.AutoIncrement; // WHY ISNT THIS REPORTING CORRECTLY
-                if (actualTable.Name == "tbl_TenantProcedureRevisionExecutionCommentReaction" && actualColumn.Name == "CommentId")
-                {
-                    //Console.WriteLine(expectedField.Entity.DisplayName);
-                    //Console.WriteLine(actualColumn.Table);
-                    //Console.WriteLine(actualColumn.Name);
-                    //Console.WriteLine(expectedField.AutoIncrement);
-                    //Console.WriteLine(expectedField.IsPartOfParentKey());
-                    //Console.WriteLine(string.Join(", ", expectedField.Entity.GetFullPrimaryKey().Select(fr => fr.FieldName)));
-                    //Console.WriteLine(string.Join(", ", expectedField.Entity.GetParentKey().Select(f => f.Name)));
-                    //Console.WriteLine(string.Join(", ", expectedField.Entity.PrimaryKey.Select(fr => fr.FieldName)));
-                    //Console.WriteLine(expectedField.AutoIncrement && !expectedField.IsPartOfParentKey());
-                }
+                    : actualColumn.IsIdentity == expectedField.AutoIncrement;
                 var sameType = actualColumn.Type == expectedField.Type.GetRawSqlServerType();
                 if (!sameNullability || !sameLength || !samePrecision || !sameDefault || !sameAutoIncrement || !sameType)
                 {
